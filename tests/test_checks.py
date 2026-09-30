@@ -7,8 +7,8 @@ from pgdoctor.checks.maintenance import cache_hit, tables_without_pk, wraparound
 from pgdoctor.model import Severity
 
 
-def _dictconn(conn):
-    return psycopg.connect(conn.info.dsn, row_factory=dict_row, autocommit=True)
+def _dictconn(dsn):
+    return psycopg.connect(dsn, row_factory=dict_row, autocommit=True)
 
 
 def test_unused_and_duplicate_indexes(clean_schema, dsn):
@@ -19,10 +19,8 @@ def test_unused_and_duplicate_indexes(clean_schema, dsn):
         cur.execute("CREATE INDEX ix_name ON t(name)")
         cur.execute("CREATE INDEX ix_name_dup ON t(name)")
 
-    c = _dictconn(clean_schema)
+    c = _dictconn(dsn)
     try:
-        with c.cursor() as cur:
-            cur.execute("SET search_path TO pgdoctor_t, public")
         res = unused_indexes(c, {"unused_index_min_mb": 0})
         names = {row["index"] for f in res.findings for row in f.rows}
         assert {"ix_name", "ix_name_dup"} <= names
@@ -33,13 +31,13 @@ def test_unused_and_duplicate_indexes(clean_schema, dsn):
         c.close()
 
 
-def test_tables_without_pk(clean_schema):
+def test_tables_without_pk(clean_schema, dsn):
     with clean_schema.cursor() as cur:
         cur.execute("SET search_path TO pgdoctor_t")
         cur.execute("CREATE TABLE haspk (id int primary key)")
         cur.execute("CREATE TABLE nopk (a int)")
 
-    c = _dictconn(clean_schema)
+    c = _dictconn(dsn)
     try:
         res = tables_without_pk(c, {})
         tables = {row["table"] for f in res.findings for row in f.rows}
@@ -49,8 +47,8 @@ def test_tables_without_pk(clean_schema):
         c.close()
 
 
-def test_wraparound_and_cache_hit_run(conn):
-    c = _dictconn(conn)
+def test_wraparound_and_cache_hit_run(dsn):
+    c = _dictconn(dsn)
     try:
         w = wraparound(c, {})
         assert w.key == "wraparound"
